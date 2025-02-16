@@ -10,13 +10,70 @@ import os
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+@bot.message_handler(commands=['time'])
+def handle_time_command(message):
+    bot.reply_to(message, "سأرسل لك جدول الصلاة بعد 30 ثانية ⏳")
+    Thread(target=delayed_schedule, args=(message.chat.id,)).start()
+
+@bot.message_handler(commands=['next'])
+def handle_next_command(message):
+    bot.reply_to(message, "سأخبرك عن موعد الصلاة القادمة بعد 30 ثانية ⏳")
+    Thread(target=delayed_next_prayer, args=(message.chat.id,)).start()
+
+def delayed_schedule(chat_id):
+    time.sleep(30)
+    prayer_times = get_prayer_times()
+    if prayer_times:
+        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
+        for prayer, time in prayer_times.items():
+            time_12hr = convert_to_12_hour(time)
+            message += f"{prayer}: {time_12hr}\n📿"
+        bot.send_message(chat_id, message)
+
+def delayed_next_prayer(chat_id):
+    time.sleep(30)
+    prayer_times = get_prayer_times()
+    if prayer_times:
+        now = datetime.now(pytz.timezone('Asia/Riyadh'))
+        current_time = now.strftime('%H:%M')
+        
+        next_prayer = None
+        time_remaining = None
+        
+        for prayer, prayer_time in prayer_times.items():
+            if prayer_time > current_time:
+                next_prayer = prayer
+                # Convert times to datetime for comparison
+                current_dt = datetime.strptime(current_time, '%H:%M')
+                prayer_dt = datetime.strptime(prayer_time, '%H:%M')
+                
+                # Calculate time difference
+                time_diff = prayer_dt - current_dt
+                minutes_remaining = time_diff.seconds // 60
+                hours = minutes_remaining // 60
+                minutes = minutes_remaining % 60
+                
+                if hours > 0:
+                    time_remaining = f"{hours} ساعة و {minutes} دقيقة"
+                else:
+                    time_remaining = f"{minutes} دقيقة"
+                break
+        
+        if next_prayer:
+            message = f"الصلاة القادمة هي {next_prayer} ⏰\n"
+            message += f"باقي {time_remaining} على وقت الصلاة 🕌"
+        else:
+            message = "تم الانتهاء من صلوات اليوم. الصلاة القادمة غداً إن شاء الله 🌙"
+            
+        bot.send_message(chat_id, message)
+
 def send_daily_schedule():
     prayer_times = get_prayer_times()
     if prayer_times:
-        message = "🕌 مواقيت الصلاة في الرياض لهذا اليوم:\n\n"
+        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
         for prayer, time in prayer_times.items():
             time_12hr = convert_to_12_hour(time)
-            message += f"📿 {prayer}: {time_12hr}\n"
+            message += f"{prayer}: {time_12hr}\n📿"
         bot.send_message(CHAT_ID, message)
 
 def check_prayer_times():
@@ -25,7 +82,7 @@ def check_prayer_times():
         current_time = datetime.now(pytz.timezone('Asia/Riyadh')).strftime('%H:%M')
         for prayer, time in prayer_times.items():
             if time == current_time:
-                message = f"🕌 حان الآن موعد صلاة {prayer}"
+                message = f"حان الآن موعد صلاة {prayer}🕌"
                 bot.send_message(CHAT_ID, message)
 
 def schedule_jobs():
@@ -47,8 +104,10 @@ def main():
         scheduler_thread.daemon = True
         scheduler_thread.start()
         
-        while True:
-            time.sleep(60)
+        # Start bot polling in the main thread
+        logger.info("Starting bot polling...")
+        bot.infinity_polling()
+        
     except Exception as e:
         logger.error(f"Bot crashed: {str(e)}")
         raise e
