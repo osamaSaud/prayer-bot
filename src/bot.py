@@ -165,7 +165,7 @@ def main():
         
         # Start polling with proper parameters
         logger.info("Starting bot polling...")
-        bot.infinity_polling(timeout=20, long_polling_timeout=10, restart_on_conflict=True)
+        bot.infinity_polling(timeout=20, long_polling_timeout=10)
         
     except Exception as e:
         logger.error(f"Bot crashed: {str(e)}")
