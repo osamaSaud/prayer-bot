@@ -10,6 +10,30 @@ import os
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Add commands description
+commands = [
+    telebot.types.BotCommand("time", "عرض مواقيت الصلاة لهذا اليوم 📅"),
+    telebot.types.BotCommand("next", "معرفة موعد الصلاة القادمة ⏰"),
+    telebot.types.BotCommand("help", "عرض قائمة الأوامر المتاحة ℹ️")
+]
+
+# Set commands
+bot.set_my_commands(commands)
+
+@bot.message_handler(commands=['help', 'start'])
+def handle_help(message):
+    help_text = """
+مرحباً بك في بوت مواقيت الصلاة! 🕌
+
+الأوامر المتاحة:
+/time - عرض مواقيت الصلاة لهذا اليوم 📅
+/next - معرفة موعد الصلاة القادمة ⏰
+/help - عرض هذه القائمة ℹ️
+
+جميع التوقيتات حسب توقيت مدينة الرياض
+"""
+    bot.reply_to(message, help_text)
+
 @bot.message_handler(commands=['time'])
 def handle_time_command(message):
     bot.reply_to(message, "سأرسل لك جدول الصلاة بعد 60 ثانية ⏳")
@@ -34,7 +58,8 @@ def delayed_next_prayer(chat_id):
     time.sleep(60)
     prayer_times = get_prayer_times()
     if prayer_times:
-        now = datetime.now(pytz.timezone('Asia/Riyadh'))
+        riyadh_tz = pytz.timezone('Asia/Riyadh')
+        now = datetime.now(riyadh_tz)
         current_time = now.strftime('%H:%M')
         
         next_prayer = None
@@ -46,11 +71,13 @@ def delayed_next_prayer(chat_id):
             if prayer_time > current_time:
                 next_prayer = prayer
                 current_dt = now
+                # Make prayer_dt timezone aware
                 prayer_dt = datetime.strptime(prayer_time, '%H:%M').replace(
                     year=now.year,
                     month=now.month,
                     day=now.day
                 )
+                prayer_dt = riyadh_tz.localize(prayer_dt)
                 
                 time_diff = (prayer_dt - current_dt).total_seconds()
                 minutes_remaining = int(time_diff // 60)
@@ -76,6 +103,7 @@ def delayed_next_prayer(chat_id):
                 month=tomorrow.month,
                 day=tomorrow.day
             )
+            prayer_dt = riyadh_tz.localize(prayer_dt)
             
             time_diff = (prayer_dt - current_dt).total_seconds()
             minutes_remaining = int(time_diff // 60)
@@ -118,19 +146,26 @@ def run_scheduler():
 def main():
     try:
         logger.info("Bot started...")
-        send_daily_schedule()
-        schedule_jobs()
         
+        # Set commands
+        bot.set_my_commands(commands)
+        
+        # Remove any existing webhook
+        bot.remove_webhook()
+        time.sleep(1)
+        
+        # Start scheduler in a separate thread
         scheduler_thread = Thread(target=run_scheduler)
         scheduler_thread.daemon = True
         scheduler_thread.start()
         
-        # Add these lines to handle the polling conflict
-        bot.remove_webhook()
-        time.sleep(1)
+        # Initialize schedule
+        send_daily_schedule()
+        schedule_jobs()
         
+        # Start polling with proper parameters
         logger.info("Starting bot polling...")
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        bot.infinity_polling(timeout=20, long_polling_timeout=10, restart_on_conflict=True)
         
     except Exception as e:
         logger.error(f"Bot crashed: {str(e)}")
