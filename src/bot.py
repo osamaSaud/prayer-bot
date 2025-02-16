@@ -25,8 +25,8 @@ def delayed_schedule(chat_id):
     prayer_times = get_prayer_times()
     if prayer_times:
         message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
-        for prayer, time in prayer_times.items():
-            time_12hr = convert_to_12_hour(time)
+        for prayer, prayer_time in prayer_times.items():
+            time_12hr = convert_to_12_hour(prayer_time)
             message += f"{prayer}: {time_12hr}\n📿"
         bot.send_message(chat_id, message)
 
@@ -39,15 +39,15 @@ def delayed_next_prayer(chat_id):
         
         next_prayer = None
         time_remaining = None
+        found_next = False
         
+        # First check today's remaining prayers
         for prayer, prayer_time in prayer_times.items():
             if prayer_time > current_time:
                 next_prayer = prayer
-                # Convert times to datetime for comparison
                 current_dt = datetime.strptime(current_time, '%H:%M')
                 prayer_dt = datetime.strptime(prayer_time, '%H:%M')
                 
-                # Calculate time difference
                 time_diff = prayer_dt - current_dt
                 minutes_remaining = time_diff.seconds // 60
                 hours = minutes_remaining // 60
@@ -57,14 +57,28 @@ def delayed_next_prayer(chat_id):
                     time_remaining = f"{hours} ساعة و {minutes} دقيقة"
                 else:
                     time_remaining = f"{minutes} دقيقة"
+                found_next = True
                 break
         
-        if next_prayer:
-            message = f"الصلاة القادمة هي {next_prayer} ⏰\n"
-            message += f"باقي {time_remaining} على وقت الصلاة 🕌"
-        else:
-            message = "تم الانتهاء من صلوات اليوم. الصلاة القادمة غداً إن شاء الله 🌙"
+        # If no remaining prayers today, get first prayer of tomorrow
+        if not found_next:
+            first_prayer = list(prayer_times.items())[0]  # Get first prayer (Fajr)
+            next_prayer = first_prayer[0]
             
+            # Calculate time until tomorrow's first prayer
+            current_dt = datetime.strptime(current_time, '%H:%M')
+            tomorrow_prayer = datetime.strptime(first_prayer[1], '%H:%M')
+            
+            # Add 24 hours to tomorrow's prayer time
+            time_diff = (tomorrow_prayer - current_dt).seconds + 24 * 3600
+            minutes_remaining = time_diff // 60
+            hours = minutes_remaining // 60
+            minutes = minutes_remaining % 60
+            
+            time_remaining = f"{hours} ساعة و {minutes} دقيقة"
+        
+        message = f"الصلاة القادمة هي {next_prayer} ⏰\n"
+        message += f"باقي {time_remaining} على وقت الصلاة 🕌"
         bot.send_message(chat_id, message)
 
 def send_daily_schedule():
@@ -73,7 +87,7 @@ def send_daily_schedule():
         message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
         for prayer, time in prayer_times.items():
             time_12hr = convert_to_12_hour(time)
-            message += f"{prayer}: {time_12hr}\n📿"
+            message += f"{prayer}: {time_12hr}📿\n"
         bot.send_message(CHAT_ID, message)
 
 def check_prayer_times():

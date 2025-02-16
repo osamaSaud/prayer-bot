@@ -19,7 +19,7 @@ def get_prayer_times():
             'الظهر': timings['Dhuhr'],
             'العصر': timings['Asr'],
             'المغرب': timings['Maghrib'],
-            'العشاء': timings['Isha']
+            'العtraشاء': timings['Isha']
         }
     except Exception as e:
         logger.error(f"Error fetching prayer times: {e}")
