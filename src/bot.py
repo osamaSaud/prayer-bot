@@ -1,5 +1,5 @@
 import telebot
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import schedule
 import time
@@ -12,26 +12,26 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['time'])
 def handle_time_command(message):
-    bot.reply_to(message, "سأرسل لك جدول الصلاة بعد 30 ثانية ⏳")
+    bot.reply_to(message, "سأرسل لك جدول الصلاة بعد 60 ثانية ⏳")
     Thread(target=delayed_schedule, args=(message.chat.id,)).start()
 
 @bot.message_handler(commands=['next'])
 def handle_next_command(message):
-    bot.reply_to(message, "سأخبرك عن موعد الصلاة القادمة بعد 30 ثانية ⏳")
+    bot.reply_to(message, "سأخبرك عن موعد الصلاة القادمة بعد 60 ثانية ⏳")
     Thread(target=delayed_next_prayer, args=(message.chat.id,)).start()
 
 def delayed_schedule(chat_id):
-    time.sleep(30)
+    time.sleep(60)
     prayer_times = get_prayer_times()
     if prayer_times:
-        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
+        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n"
         for prayer, prayer_time in prayer_times.items():
             time_12hr = convert_to_12_hour(prayer_time)
             message += f"{prayer}: {time_12hr}\n📿"
         bot.send_message(chat_id, message)
 
 def delayed_next_prayer(chat_id):
-    time.sleep(30)
+    time.sleep(60)
     prayer_times = get_prayer_times()
     if prayer_times:
         now = datetime.now(pytz.timezone('Asia/Riyadh'))
@@ -45,11 +45,15 @@ def delayed_next_prayer(chat_id):
         for prayer, prayer_time in prayer_times.items():
             if prayer_time > current_time:
                 next_prayer = prayer
-                current_dt = datetime.strptime(current_time, '%H:%M')
-                prayer_dt = datetime.strptime(prayer_time, '%H:%M')
+                current_dt = now
+                prayer_dt = datetime.strptime(prayer_time, '%H:%M').replace(
+                    year=now.year,
+                    month=now.month,
+                    day=now.day
+                )
                 
-                time_diff = prayer_dt - current_dt
-                minutes_remaining = time_diff.seconds // 60
+                time_diff = (prayer_dt - current_dt).total_seconds()
+                minutes_remaining = int(time_diff // 60)
                 hours = minutes_remaining // 60
                 minutes = minutes_remaining % 60
                 
@@ -65,13 +69,16 @@ def delayed_next_prayer(chat_id):
             first_prayer = list(prayer_times.items())[0]  # Get first prayer (Fajr)
             next_prayer = first_prayer[0]
             
-            # Calculate time until tomorrow's first prayer
-            current_dt = datetime.strptime(current_time, '%H:%M')
-            tomorrow_prayer = datetime.strptime(first_prayer[1], '%H:%M')
+            current_dt = now
+            tomorrow = now.replace(hour=0, minute=0) + timedelta(days=1)
+            prayer_dt = datetime.strptime(first_prayer[1], '%H:%M').replace(
+                year=tomorrow.year,
+                month=tomorrow.month,
+                day=tomorrow.day
+            )
             
-            # Add 24 hours to tomorrow's prayer time
-            time_diff = (tomorrow_prayer - current_dt).seconds + 24 * 3600
-            minutes_remaining = time_diff // 60
+            time_diff = (prayer_dt - current_dt).total_seconds()
+            minutes_remaining = int(time_diff // 60)
             hours = minutes_remaining // 60
             minutes = minutes_remaining % 60
             
@@ -84,7 +91,7 @@ def delayed_next_prayer(chat_id):
 def send_daily_schedule():
     prayer_times = get_prayer_times()
     if prayer_times:
-        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n🕌"
+        message = "مواقيت الصلاة في الرياض لهذا اليوم:\n\n"
         for prayer, time in prayer_times.items():
             time_12hr = convert_to_12_hour(time)
             message += f"{prayer}: {time_12hr}📿\n"
@@ -118,9 +125,12 @@ def main():
         scheduler_thread.daemon = True
         scheduler_thread.start()
         
-        # Start bot polling in the main thread
+        # Add these lines to handle the polling conflict
+        bot.remove_webhook()
+        time.sleep(1)
+        
         logger.info("Starting bot polling...")
-        bot.infinity_polling()
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
         
     except Exception as e:
         logger.error(f"Bot crashed: {str(e)}")
